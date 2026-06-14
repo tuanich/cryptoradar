@@ -1,12 +1,1 @@
-{
-  "crons": [
-    {
-      "path": "/api/cron/scan",
-      "schedule": "*/5 * * * *"
-    },
-    {
-      "path": "/api/cron/daily-summary",
-      "schedule": "0 1 * * *"
-    }
-  ]
-}
+{}

@@ -1,6 +1,6 @@
 // pages/api/recommendation.js
-// native fetch only - no axios - works on Vercel
-// Includes: Binance prices + Yahoo Finance macro + BTC ETF flows
+// Uses Yahoo Finance for ALL data (Binance blocked on Vercel US servers)
+// Macro: DJI, IXIC, Gold, Oil, DXY, TNX | Crypto: BTC-USD, ETH-USD etc | ETF flows
 
 const cache = new Map();
 const TTL = 90000;
@@ -37,18 +37,10 @@ function analyze(closes,vols){
     support:lo,resistance:hi};
 }
 
-async function fetchBinance(sym,tf){
-  const r=await fetch('https://api.binance.com/api/v3/klines?symbol='+sym+'&interval='+tf+'&limit=120');
-  if(!r.ok)throw new Error('Binance '+sym+':'+r.status);
-  const d=await r.json();
-  const closes=d.map(k=>parseFloat(k[4]));
-  const vols=d.map(k=>parseFloat(k[5]));
-  return{closes,vols,analysis:analyze(closes,vols)};
-}
-
-async function fetchYahoo(sym){
-  const r=await fetch('https://query1.finance.yahoo.com/v8/finance/chart/'+encodeURIComponent(sym)+'?interval=1d&range=6mo',{headers:{'User-Agent':'Mozilla/5.0'}});
-  if(!r.ok)throw new Error('Yahoo '+sym+':'+r.status);
+async function fetchYahoo(sym,interval,range){
+  const url='https://query1.finance.yahoo.com/v8/finance/chart/'+encodeURIComponent(sym)+'?interval='+interval+'&range='+range;
+  const r=await fetch(url,{headers:{'User-Agent':'Mozilla/5.0'}});
+  if(!r.ok)throw new Error('Yahoo '+sym+' '+r.status);
   const d=await r.json();
   const q=d.chart.result[0];
   const closes=q.indicators.quote[0].close.filter(Boolean);
@@ -58,14 +50,38 @@ async function fetchYahoo(sym){
   return{closes,vols,price,chgPct,analysis:analyze(closes,vols)};
 }
 
-const MACRO={'^DJI':{label:'Dow Jones',w:2,up:true},'^IXIC':{label:'Nasdaq',w:2,up:true},'GC=F':{label:'Gold',w:1,up:true},'CL=F':{label:'Oil',w:-1,up:false},'DX-Y.NYB':{label:'USD Index',w:-2,up:false},'^TNX':{label:'US 10Y',w:-2,up:false}};
+// Crypto coin mapping: internal symbol -> Yahoo Finance symbol
+const COIN_MAP={
+  'BTCUSDT':'BTC-USD','ETHUSDT':'ETH-USD',
+  'SOLUSDT':'SOL-USD','BNBUSDT':'BNB-USD',
+};
+
+async function fetchCryptoTFs(coin){
+  const yahooSym=COIN_MAP[coin]||'BTC-USD';
+  const [w1,d1,h1]=await Promise.all([
+    fetchYahoo(yahooSym,'1wk','2y').catch(()=>null),
+    fetchYahoo(yahooSym,'1d','1y').catch(()=>null),
+    fetchYahoo(yahooSym,'1h','7d').catch(()=>null),
+  ]);
+  // Use 1h data for both 4h and 1h signals (Yahoo doesn't have 4h)
+  return{'1w':w1,'1d':d1,'4h':h1,'1h':h1};
+}
+
+const MACRO={
+  '^DJI':{label:'Dow Jones',w:2,up:true},
+  '^IXIC':{label:'Nasdaq',w:2,up:true},
+  'GC=F':{label:'Gold',w:1,up:true},
+  'CL=F':{label:'Oil',w:-1,up:false},
+  'DX-Y.NYB':{label:'USD Index',w:-2,up:false},
+  '^TNX':{label:'US 10Y',w:-2,up:false}
+};
 const ETF_W={IBIT:3,FBTC:2,ARKB:2,BITB:1,HODL:1,GBTC:2};
 const ETF_NAMES={IBIT:'BlackRock',FBTC:'Fidelity',ARKB:'ARK',BITB:'Bitwise',HODL:'VanEck',GBTC:'Grayscale'};
 
 async function fetchEtfFlows(){
   const flows={};
   await Promise.allSettled(['IBIT','FBTC','ARKB','BITB','HODL','GBTC'].map(async t=>{
-    try{const d=await fetchYahoo(t);const v=d.vols[d.vols.length-1]||1;
+    try{const d=await fetchYahoo(t,'1d','30d');const v=d.vols[d.vols.length-1]||1;
       flows[t]={name:ETF_NAMES[t],price:d.price,chgPct:d.chgPct,
         flow1d:d.chgPct>0?(v*d.price/1e6*0.06):-(v*d.price/1e6*0.06)};}
     catch(e){}
@@ -100,12 +116,12 @@ function buildRec(macro,etf,tfs,coin){
   const conf=Math.round((L/5)*100);
   let action,short,dp,wp;
   if(tb&&eb&&bull(h4?.overall)&&bull(h1?.overall)){action='\u25b2 BUY NOW';short='BUY';dp='ETF inflow+macro+tech confirm. Enter long.';wp='Hold 3-5 days. Target weekly resistance.';}
-  else if(tb&&bull(h4?.overall)){action='\u25b2 Prepare to buy';short='WAIT_BUY';dp='4h ready. Wait 1h confirm.';wp='Entry forming.';}
-  else if(tb){action='\u25b2 Bull - wait pullback';short='WAIT_BUY';dp='Wait for pullback.';wp='Buy next dip.';}
+  else if(tb&&bull(h4?.overall)){action='\u25b2 Prepare to buy';short='WAIT_BUY';dp='Signals aligning. Wait for 1h confirm.';wp='Entry zone forming.';}
+  else if(tb){action='\u25b2 Bull - wait pullback';short='WAIT_BUY';dp='Wait for pullback to MA/support.';wp='Buy next dip.';}
   else if(tr&&er&&bear(h4?.overall)&&bear(h1?.overall)){action='\u25bc SELL / AVOID';short='SELL';dp='ETF outflow+macro+tech confirm bear.';wp='Stay cash.';}
-  else if(tr&&bear(h4?.overall)){action='\u25bc Prepare to sell';short='WAIT_SELL';dp='Avoid buys.';wp='Hold cash.';}
+  else if(tr&&bear(h4?.overall)){action='\u25bc Prepare to sell';short='WAIT_SELL';dp='Avoid new buys.';wp='Hold cash.';}
   else if(tr){action='\u25bc Bear - stay cash';short='AVOID';dp='Protect capital.';wp='Stay out.';}
-  else{action='\u2014 Wait';short='NEUTRAL';dp='No setup.';wp='Monitor macro.';}
+  else{action='\u2014 Wait';short='NEUTRAL';dp='No high-probability setup.';wp='Monitor macro and ETF flows.';}
   const ib=short==='BUY';
   const sl=price>0?(ib?price-atr*1.5:price+atr*1.5):0;
   const tp1=price>0?(ib?price+atr*2:price-atr*2):0;
@@ -129,13 +145,12 @@ export default async function handler(req,res){
   const cached=cache.get(key);
   if(cached&&Date.now()-cached.ts<TTL)return res.status(200).json(cached.data);
   try{
-    const[macroRes,tfsArr,etfData]=await Promise.all([
-      Promise.allSettled(Object.keys(MACRO).map(async k=>{try{return[k,await fetchYahoo(k)];}catch(e){return[k,null];}})),
-      Promise.all(['1w','1d','4h','1h'].map(tf=>fetchBinance(coin,tf).catch(()=>null))),
+    const[macroRes,tfs,etfData]=await Promise.all([
+      Promise.allSettled(Object.keys(MACRO).map(async k=>{try{return[k,await fetchYahoo(k,'1d','6mo')];}catch(e){return[k,null];}})),
+      fetchCryptoTFs(coin),
       fetchEtfFlows()
     ]);
     const macroData=Object.fromEntries(macroRes.map(r=>r.value||['',null]).filter(([k])=>k));
-    const tfs={'1w':tfsArr[0],'1d':tfsArr[1],'4h':tfsArr[2],'1h':tfsArr[3]};
     const macroTrend=calcMacro(macroData);
     const rec=buildRec(macroTrend,etfData,tfs,label);
     const result={rec,macroData,macroTrend};

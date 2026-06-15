@@ -5,7 +5,7 @@ const fmtP = p => p > 100 ? '$' + p.toLocaleString(undefined, { maximumFractionD
 const fmtM = m => (m >= 0 ? '+$' : '-$') + Math.abs(m || 0).toFixed(1) + 'M';
 
 function Badge({ sig }) {
-  const map = { 'STRONG BUY': { bg: '#3B6D11', c: '#EAF3DE', t: '\u25b2\u25b2 Strong buy' }, 'BUY': { bg: '#EAF3DE', c: '#27500A', t: '\u25b2 Buy' }, 'NEUTRAL': { bg: '#F1EFE8', c: '#444441', t: '\u2014 Neutral' }, 'SELL': { bg: '#FCEBEB', c: '#791F1F', t: '\u25bc Sell' }, 'STRONG SELL': { bg: '#A32D2D', c: '#FCEBEB', t: '\u25bc\u25bc Strong sell' } };
+  const map = { 'STRONG BUY': { bg: '#3B6D11', c: '#EAF3DE', t: '▲▲ Strong buy' }, 'BUY': { bg: '#EAF3DE', c: '#27500A', t: '▲ Buy' }, 'NEUTRAL': { bg: '#F1EFE8', c: '#444441', t: '— Neutral' }, 'SELL': { bg: '#FCEBEB', c: '#791F1F', t: '▼ Sell' }, 'STRONG SELL': { bg: '#A32D2D', c: '#FCEBEB', t: '▼▼ Strong sell' } };
   const s = map[sig] || map['NEUTRAL'];
   return <span style={{ background: s.bg, color: s.c, borderRadius: 6, padding: '2px 9px', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>{s.t}</span>;
 }
@@ -33,7 +33,7 @@ export default function Dashboard() {
     if (!data?.rec) return; setTgStatus('Sending...');
     try {
       const rec = data.rec;
-      const msg = coin.label + ' \u2014 ' + rec.action + '\nNow: ' + fmtP(rec.currentPrice) + (rec.levels.hasLevels ? ('\nEntry: ' + fmtP(rec.entryPrice) + '\nSL: ' + fmtP(rec.levels.sl) + '\nTP1: ' + fmtP(rec.levels.tp1)) : '') + '\nETF(10d): ' + fmtM(rec.etf.net10d) + '\nMacro: ' + rec.macroTrend.trend;
+      const msg = coin.label + ' — ' + rec.action + '\nNow: ' + fmtP(rec.currentPrice) + (rec.levels.hasLevels ? ('\nEntry: ' + fmtP(rec.entryPrice) + '\nSL: ' + fmtP(rec.levels.sl) + '\nTP1: ' + fmtP(rec.levels.tp1)) : '') + '\nETF(10d): ' + fmtM(rec.etf.net10d) + '\nMacro: ' + rec.macroTrend.trend;
       const r = await fetch('/api/telegram/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: msg }) });
       const j = await r.json(); setTgStatus(j.ok ? 'Sent!' : 'Failed');
     } catch { setTgStatus('Error'); }
@@ -60,12 +60,12 @@ export default function Dashboard() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem', flexWrap: 'wrap', gap: 8 }}>
           <div>
             <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>CryptoRadar</h1>
-            <p style={{ margin: 0, fontSize: 11, color: '#888' }}>Macro + ETF + Technical \u2192 view (not a guarantee)</p>
+            <p style={{ margin: 0, fontSize: 11, color: '#888' }}>Macro + ETF + Technical → view (not a guarantee)</p>
           </div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {COINS.map(c => <button key={c.sym} onClick={() => setCoin(c)} style={{ padding: '6px 14px', borderRadius: 8, border: '0.5px solid', cursor: 'pointer', fontSize: 13, fontWeight: 600, background: coin.sym === c.sym ? '#534AB7' : '#fff', color: coin.sym === c.sym ? '#fff' : '#333', borderColor: coin.sym === c.sym ? '#534AB7' : '#ddd' }}>{c.label}</button>)}
-            <button onClick={load} style={{ padding: '6px 12px', borderRadius: 8, border: '0.5px solid #ddd', cursor: 'pointer', fontSize: 13, background: '#fff' }}>\u21bb</button>
-            <button onClick={sendTg} style={{ padding: '6px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, background: '#0088cc', color: '#fff', fontWeight: 600 }}>{tgStatus || '\ud83d\udcf1'}</button>
+            <button onClick={load} style={{ padding: '6px 12px', borderRadius: 8, border: '0.5px solid #ddd', cursor: 'pointer', fontSize: 13, background: '#fff' }}>↻</button>
+            <button onClick={sendTg} style={{ padding: '6px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, background: '#0088cc', color: '#fff', fontWeight: 600 }}>{tgStatus || '📱'}</button>
           </div>
         </div>
 
@@ -75,7 +75,7 @@ export default function Dashboard() {
 
           {/* PREDICTION / CONCLUSION — always shows */}
           <div style={{ background: bg, border: bdr, borderRadius: 16, padding: '1.1rem', marginBottom: '0.85rem' }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: '#777', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 4 }}>{coin.label} \u2014 conclusion</div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: '#777', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 4 }}>{coin.label} — conclusion</div>
             <div style={{ fontSize: 26, fontWeight: 800, color: tc, marginBottom: 4 }}>{rec.action}</div>
             <div style={{ fontSize: 13, color: '#555', marginBottom: 12 }}>{rec.entryNote}</div>
 
@@ -87,23 +87,23 @@ export default function Dashboard() {
               </div>
               {rec.levels.hasLevels ? <>
                 <div style={{ background: 'rgba(0,0,0,0.06)', borderRadius: 10, padding: '9px 12px' }}>
-                  <div style={{ fontSize: 11, color: '#555' }}>\ud83d\udccd Entry / action price</div>
+                  <div style={{ fontSize: 11, color: '#555' }}>📍 Entry / action price</div>
                   <div style={{ fontSize: 20, fontWeight: 800 }}>{fmtP(rec.entryPrice)}</div>
                   <div style={{ fontSize: 11, color: '#888' }}>{rec.actionShort === 'WAIT_BUY' && rec.entryPrice < rec.currentPrice ? 'limit buy below market' : 'at market'}</div>
                 </div>
                 <div style={{ background: 'rgba(163,45,45,0.1)', borderRadius: 10, padding: '9px 12px' }}>
-                  <div style={{ fontSize: 11, color: '#555' }}>\ud83d\uded1 Stop loss</div>
+                  <div style={{ fontSize: 11, color: '#555' }}>🛑 Stop loss</div>
                   <div style={{ fontSize: 20, fontWeight: 800, color: '#A32D2D' }}>{fmtP(rec.levels.sl)}</div>
                   <div style={{ fontSize: 11, color: '#888' }}>-{rec.levels.slPct}% from entry</div>
                 </div>
                 <div style={{ background: 'rgba(59,109,17,0.08)', borderRadius: 10, padding: '9px 12px' }}>
-                  <div style={{ fontSize: 11, color: '#555' }}>\u2705 TP1 / \ud83c\udfaf TP2</div>
+                  <div style={{ fontSize: 11, color: '#555' }}>✅ TP1 / 🎯 TP2</div>
                   <div style={{ fontSize: 16, fontWeight: 800, color: '#27500A' }}>{fmtP(rec.levels.tp1)} / {fmtP(rec.levels.tp2)}</div>
                   <div style={{ fontSize: 11, color: '#888' }}>+{rec.levels.tp1Pct}% / +{rec.levels.tp2Pct}%</div>
                 </div>
               </> : <div style={{ background: 'rgba(0,0,0,0.05)', borderRadius: 10, padding: '9px 12px', gridColumn: '1 / -1' }}>
                 <div style={{ fontSize: 12, color: '#666', marginBottom: 3 }}>Why no entry/stop/target yet</div>
-                <div style={{ fontSize: 13 }}>\u23f3 Waiting for: <strong>{rec.waitingFor}</strong></div>
+                <div style={{ fontSize: 13 }}>⏳ Waiting for: <strong>{rec.waitingFor}</strong></div>
                 <div style={{ fontSize: 12, color: '#777', marginTop: 4 }}>Current lean: <strong>{rec.bias}</strong></div>
               </div>}
             </div>
@@ -117,14 +117,14 @@ export default function Dashboard() {
                 <div style={{ height: '100%', width: (rec.confidence || 0) + '%', background: cc, borderRadius: 5 }} />
               </div>
             </div>
-            <div style={{ fontSize: 11, color: '#888', marginTop: 8 }}>\u26a0\ufe0f Educational only \u00b7 not financial advice \u00b7 risk max 1-2% per trade</div>
+            <div style={{ fontSize: 11, color: '#888', marginTop: 8 }}>⚠️ Educational only · not financial advice · risk max 1-2% per trade</div>
           </div>
 
           {/* Layers: macro + ETF side by side, stack on mobile */}
           <div style={autoGrid(260)}>
             <div style={card}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                <div style={{ fontSize: 13, fontWeight: 700 }}>\ud83c\udf0d Macro trend</div><Badge sig={mb} />
+                <div style={{ fontSize: 13, fontWeight: 700 }}>🌍 Macro trend</div><Badge sig={mb} />
               </div>
               {md && Object.entries(md).map(([s, d]) => d?.analysis ? (
                 <div key={s} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', borderBottom: '0.5px solid #f5f3f0', fontSize: 12 }}>
@@ -138,8 +138,8 @@ export default function Dashboard() {
             {/* ETF flows — now per-asset */}
             <div style={card}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                <div><div style={{ fontSize: 13, fontWeight: 700 }}>\ud83c\udfe6 {coin.label} ETF flows</div>
-                  <div style={{ fontSize: 11, color: '#888' }}>Real data \u00b7 Farside snapshot</div></div>
+                <div><div style={{ fontSize: 13, fontWeight: 700 }}>🏦 {coin.label} ETF flows</div>
+                  <div style={{ fontSize: 11, color: '#888' }}>Real data · Farside snapshot</div></div>
                 {etf && <Badge sig={etf.signal} />}
               </div>
               {etf?.hasEtf ? <>
@@ -150,15 +150,15 @@ export default function Dashboard() {
                   <span style={{ color: '#666' }}>10-day net</span><strong style={{ color: etf.net10d >= 0 ? '#27500A' : '#A32D2D' }}>{fmtM(etf.net10d)}</strong>
                 </div>
                 <div style={{ marginTop: 8, fontSize: 11, color: '#666', padding: '5px 8px', background: '#f8f7f4', borderRadius: 6 }}>
-                  {etf.net10d > 100 ? 'Inflows \u2192 bullish' : etf.net10d < -100 ? 'Outflows \u2192 bearish' : 'Flat \u2192 neutral'} \u00b7 {etf.funds}
+                  {etf.net10d > 100 ? 'Inflows → bullish' : etf.net10d < -100 ? 'Outflows → bearish' : 'Flat → neutral'} · {etf.funds}
                 </div>
-              </> : <div style={{ fontSize: 12, color: '#888', padding: '12px 4px' }}>No US spot ETF for {coin.label} yet \u2014 this layer is N/A.</div>}
+              </> : <div style={{ fontSize: 12, color: '#888', padding: '12px 4px' }}>No US spot ETF for {coin.label} yet — this layer is N/A.</div>}
             </div>
           </div>
 
           {/* Technical: 4 timeframes, wraps on mobile */}
           <div style={card}>
-            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>\ud83d\udcca Technical (5 indicators \u00b7 4 timeframes)</div>
+            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>📊 Technical (5 indicators · 4 timeframes)</div>
             <div style={autoGrid(150)}>
               {['1w', '1d', '4h', '1h'].map(tf => (
                 <div key={tf} style={{ background: '#faf9f7', borderRadius: 10, padding: '9px 11px' }}>
@@ -173,7 +173,7 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div style={{ textAlign: 'center', fontSize: 11, color: '#aaa', padding: '6px 0 2rem' }}>Updated: {upd} \u00b7 auto-refresh 60s \u00b7 prices live (Yahoo), ETF flows = 12 Jun snapshot</div>
+          <div style={{ textAlign: 'center', fontSize: 11, color: '#aaa', padding: '6px 0 2rem' }}>Updated: {upd} · auto-refresh 60s · prices live (Yahoo), ETF flows = 12 Jun snapshot</div>
         </>}
       </div>
     </div>

@@ -2,14 +2,12 @@
 // Runs once daily (see vercel.json). Fetches the working /api/recommendation
 // for each coin and sends one Telegram summary. Uses the live deployment URL
 // so it shares the same Yahoo-Finance data path that actually works on Vercel.
-
 const COINS = [
   { sym: 'BTCUSDT', label: 'BTC' },
   { sym: 'ETHUSDT', label: 'ETH' },
   { sym: 'SOLUSDT', label: 'SOL' },
   { sym: 'BNBUSDT', label: 'BNB' },
 ];
-
 const fmtP = p => (p > 100 ? '$' + Math.round(p).toLocaleString() : '$' + (p || 0).toFixed(2));
 
 async function sendTelegram(text) {
@@ -25,28 +23,41 @@ async function sendTelegram(text) {
   return d.ok;
 }
 
+// Fetch one coin's recommendation line. Always returns a string so a soft
+// failure (bad status, missing rec) shows "data unavailable" instead of
+// silently dropping the coin from the summary.
+async function coinLine(base, sym, label) {
+  try {
+    const r = await fetch(base + '/api/recommendation?coin=' + sym + '&label=' + label);
+    if (!r.ok) return { line: '\u26AA <b>' + label + '</b> \u2014 data unavailable', trend: null };
+    const j = await r.json();
+    const rec = j.rec;
+    if (!rec) return { line: '\u26AA <b>' + label + '</b> \u2014 data unavailable', trend: null };
+    const emoji = rec.actionShort === 'BUY' ? '\u{1F7E2}' : rec.actionShort === 'SELL' ? '\u{1F534}' : '\u26AA';
+    return {
+      line: emoji + ' <b>' + label + '</b> ' + fmtP(rec.price) + ' \u2014 ' + rec.action + ' (' + rec.confidence + '%)',
+      trend: rec.macroTrend?.trend || null,
+    };
+  } catch (e) {
+    return { line: '\u26AA <b>' + label + '</b> \u2014 data unavailable', trend: null };
+  }
+}
+
 export default async function handler(req, res) {
+  // Only allow Vercel Cron (or anyone holding CRON_SECRET) to trigger this.
+  // Set CRON_SECRET in your Vercel project env; Vercel sends it automatically.
+  if (process.env.CRON_SECRET && req.headers.authorization !== 'Bearer ' + process.env.CRON_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
   try {
     const base = 'https://' + (process.env.VERCEL_PROJECT_PRODUCTION_URL || req.headers.host);
     const now = new Date().toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh', dateStyle: 'medium', timeStyle: 'short' });
 
-    const lines = [];
-    let macroTrend = 'UNKNOWN';
-
-    for (const { sym, label } of COINS) {
-      try {
-        const r = await fetch(base + '/api/recommendation?coin=' + sym + '&label=' + label);
-        const j = await r.json();
-        const rec = j.rec;
-        if (rec) {
-          macroTrend = rec.macroTrend?.trend || macroTrend;
-          const emoji = rec.actionShort === 'BUY' ? '\u{1F7E2}' : rec.actionShort === 'SELL' ? '\u{1F534}' : '\u26AA';
-          lines.push(emoji + ' <b>' + label + '</b> ' + fmtP(rec.price) + ' \u2014 ' + rec.action + ' (' + rec.confidence + '%)');
-        }
-      } catch (e) {
-        lines.push('\u26AA <b>' + label + '</b> \u2014 data unavailable');
-      }
-    }
+    // Fetch all coins in parallel; Promise.all preserves COINS order.
+    const results = await Promise.all(COINS.map(c => coinLine(base, c.sym, c.label)));
+    const lines = results.map(r => r.line);
+    const macroTrend = results.find(r => r.trend)?.trend || 'UNKNOWN';
 
     const msg =
       '\u{1F4C5} <b>CryptoRadar \u2014 Daily Summary</b>\n' +

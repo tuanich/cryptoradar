@@ -3,6 +3,18 @@
 // Real per-asset ETF flow snapshot (Farside, 12 Jun 2026).
 // 4h candles are RESAMPLED from 1h so 4h != 1h.
 
+const { getSummary } = require('../../lib/etfFlows');
+const e = await getSummary(coin.label);   // handler is already async, so await is fine
+
+rec.etf = {
+  hasEtf:  e.hasEtf,
+  last1d:  e.latest,
+  net10d:  e.tenDay,
+  funds:   e.funds,
+  lastDate: e.lastDate,        // <-- new: drives the dynamic date label
+  signal:  /* keep your existing signal logic (uses e.tenDay / net10d) */,
+};
+
 const cache = new Map();
 const TTL = 90000;
 

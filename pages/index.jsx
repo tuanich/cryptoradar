@@ -144,7 +144,7 @@ export default function Dashboard() {
               </div>
               {etf?.hasEtf ? <>
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '0.5px solid #f5f3f0', fontSize: 13 }}>
-                  <span style={{ color: '#666' }}>Latest day (12 Jun)</span><strong style={{ color: etf.last1d >= 0 ? '#27500A' : '#A32D2D' }}>{fmtM(etf.last1d)}</strong>
+                  <span style={{ color: '#666' }}>Latest day{etf.lastDate ? ` (${etf.lastDate})` : ''}</span><strong style={{ color: etf.last1d >= 0 ? '#27500A' : '#A32D2D' }}>{fmtM(etf.last1d)}</strong>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '0.5px solid #f5f3f0', fontSize: 13 }}>
                   <span style={{ color: '#666' }}>10-day net</span><strong style={{ color: etf.net10d >= 0 ? '#27500A' : '#A32D2D' }}>{fmtM(etf.net10d)}</strong>
@@ -165,10 +165,27 @@ export default function Dashboard() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                     <span style={{ fontSize: 12, fontWeight: 700 }}>{tf === '1w' ? 'Weekly' : tf === '1d' ? 'Daily' : tf}</span><Badge sig={rec.timeframes[tf]} />
                   </div>
-                  {rec.indicators[tf] && Object.keys(rec.indicators[tf]).length ? Object.entries({ 'MA': rec.indicators[tf].maSig, ['RSI ' + (rec.rsi?.[tf] || '')]: rec.indicators[tf].rsiSig, 'MACD': rec.indicators[tf].macdSig, 'S/R': rec.indicators[tf].srSig, 'Vol': rec.indicators[tf].volSig }).map(([l, sig]) => (
-                    <div key={l} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2px 0', fontSize: 11 }}>
-                      <span style={{ color: '#777' }}>{l}</span><Badge sig={sig || 'NEUTRAL'} />
-                    </div>)) : <div style={{ fontSize: 11, color: '#aaa' }}>(weekly/daily only)</div>}
+                  {rec.indicators[tf] && Object.keys(rec.indicators[tf]).length ? (() => {
+  const ind = rec.indicators[tf];
+  const rows = [['MA', ind.maSig], ['RSI ' + (rec.rsi?.[tf] || ''), ind.rsiSig], ['MACD', ind.macdSig], ['S/R', ind.srSig], ['Vol', ind.volSig]];
+  return rows.map(([l, sig]) => (
+    <div key={l} style={{ padding: '2px 0', fontSize: 11 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ color: '#777' }}>{l}</span><Badge sig={sig || 'NEUTRAL'} />
+      </div>
+      {l === 'Vol' && ind.volBuyPct != null && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 3 }}>
+          <div style={{ flex: 1, height: 5, borderRadius: 3, overflow: 'hidden', display: 'flex', background: '#eee' }}>
+            <div style={{ width: ind.volBuyPct + '%', background: '#3B6D11' }} />
+            <div style={{ width: (100 - ind.volBuyPct) + '%', background: '#A32D2D' }} />
+          </div>
+          <span style={{ fontSize: 9, color: '#27500A', fontWeight: 600 }}>B{Math.round(ind.volBuyPct)}</span>
+          <span style={{ fontSize: 9, color: '#A32D2D', fontWeight: 600 }}>S{Math.round(100 - ind.volBuyPct)}</span>
+        </div>
+      )}
+    </div>
+  ));
+})() : <div style={{ fontSize: 11, color: '#aaa' }}>(weekly/daily only)</div>}
                 </div>))}
             </div>
           </div>

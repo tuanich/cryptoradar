@@ -1,30 +1,13 @@
 // pages/api/recommendation.js
 // All data from Yahoo Finance (Binance is geo-blocked on Vercel).
-// Real per-asset ETF flow snapshot (Farside, 12 Jun 2026).
+// ETF flows now LIVE via lib/etfFlows.js (CoinGlass) with snapshot fallback.
 // 4h candles are RESAMPLED from 1h so 4h != 1h.
 
 const { getSummary } = require('../../lib/etfFlows');
-const e = await getSummary(coin.label);   // handler is already async, so await is fine
-
-rec.etf = {
-  hasEtf:  e.hasEtf,
-  last1d:  e.latest,
-  net10d:  e.tenDay,
-  funds:   e.funds,
-  lastDate: e.lastDate,        // <-- new: drives the dynamic date label
-  signal:  /* keep your existing signal logic (uses e.tenDay / net10d) */,
-};
 
 const cache = new Map();
 const TTL = 90000;
 
-// ---- real ETF flow snapshot (US$m), Farside, through 12 Jun 2026 ----
-const ETF = {
-  BTC: { last1d: 85.9,  net10d: -2041.3, hasEtf: true,  funds: 'IBIT, FBTC, BITB, ARKB, GBTC' },
-  ETH: { last1d: -4.9,  net10d: -189.2,  hasEtf: true,  funds: 'ETHA, FETH, ETHE' },
-  SOL: { last1d: 0.0,   net10d: -10.4,   hasEtf: true,  funds: 'BSOL, FSOL, GSOL' },
-  BNB: { last1d: 0,     net10d: 0,       hasEtf: false, funds: 'no US spot ETF yet' },
-};
 function etfSignalFrom(net10d, hasEtf) {
   if (!hasEtf) return 'NEUTRAL';
   if (net10d > 500) return 'STRONG BUY';
@@ -55,11 +38,26 @@ function analyze(closes, vols) {
   const chg = closes[closes.length - 1] - closes[closes.length - 2];
   const vr = (vols[vols.length - 1] || 1) / avgV;
   const volSig = vr > 1.5 && chg > 0 ? 'BUY' : vr > 1.5 && chg < 0 ? 'SELL' : 'NEUTRAL';
+
+  // --- buy/sell volume estimate (up/down volume, "tick rule") ---
+  // Only closes + vols are available (no high/low), so classify each candle's
+  // volume by close-to-close direction over a recent window. ESTIMATE of
+  // pressure, not real taker order-flow (that needs Binance, blocked on Vercel).
+  let buyVol = 0, sellVol = 0;
+  const win = Math.min(14, closes.length - 1);
+  for (let i = closes.length - win; i < closes.length; i++) {
+    const v = vols[i] || 0;
+    const dd = closes[i] - closes[i - 1];
+    if (dd > 0) buyVol += v; else if (dd < 0) sellVol += v; else { buyVol += v / 2; sellVol += v / 2; }
+  }
+  const volTotal = buyVol + sellVol;
+  const volBuyPct = volTotal > 0 ? parseFloat(((buyVol / volTotal) * 100).toFixed(1)) : 50;
+
   const M = { 'STRONG BUY': 2, 'BUY': 1, 'NEUTRAL': 0, 'SELL': -1, 'STRONG SELL': -2 };
   const score = M[maSig] + M[rsiSig] + M[macdSig] + M[srSig] + M[volSig];
   const overall = score >= 4 ? 'STRONG BUY' : score >= 2 ? 'BUY' : score <= -4 ? 'STRONG SELL' : score <= -2 ? 'SELL' : 'NEUTRAL';
   const atr = closes.slice(-14).reduce((s, c, i, a) => s + (i > 0 ? Math.abs(c - a[i - 1]) : 0), 0) / 13;
-  return { overall, score, indicators: { maSig, rsiSig, macdSig, srSig, volSig }, rsi: parseFloat(rsi.toFixed(1)), atr, ma20, price: closes[closes.length - 1], support: lo, resistance: hi };
+  return { overall, score, indicators: { maSig, rsiSig, macdSig, srSig, volSig, volBuyPct }, rsi: parseFloat(rsi.toFixed(1)), atr, ma20, price: closes[closes.length - 1], support: lo, resistance: hi };
 }
 
 // resample 1h arrays into Nh blocks (close of each block, summed volume)
@@ -188,7 +186,7 @@ function buildRec(macro, etfData, tfs, coin) {
   return {
     coin, currentPrice, chgPct, action, actionShort: short, entryPrice, entryNote, waitingFor, bias,
     confidence, layers, macroTrend: macro,
-    etf: { signal: etfData.signal, last1d: etfData.last1d, net10d: etfData.net10d, hasEtf: etfData.hasEtf, funds: etfData.funds },
+    etf: { signal: etfData.signal, last1d: etfData.last1d, net10d: etfData.net10d, hasEtf: etfData.hasEtf, funds: etfData.funds, lastDate: etfData.lastDate, live: etfData.live },
     timeframes: { '1w': w1?.overall || 'NEUTRAL', '1d': d1?.overall || 'NEUTRAL', '4h': h4?.overall || 'NEUTRAL', '1h': h1?.overall || 'NEUTRAL' },
     indicators: { '4h': h4?.indicators || {}, '1h': h1?.indicators || {} },
     rsi: { '4h': h4?.rsi, '1h': h1?.rsi },
@@ -204,8 +202,17 @@ export default async function handler(req, res) {
   const cached = cache.get(key);
   if (cached && Date.now() - cached.ts < TTL) return res.status(200).json(cached.data);
   try {
-    const e = ETF[label] || ETF.BTC;
-    const etfData = { ...e, signal: etfSignalFrom(e.net10d, e.hasEtf) };
+    // LIVE ETF flows (CoinGlass via lib/etfFlows) with snapshot fallback.
+    const s = await getSummary(label);
+    const etfData = {
+      hasEtf: s.hasEtf,
+      last1d: s.latest ?? 0,
+      net10d: s.tenDay ?? 0,
+      funds: s.funds || 'no US spot ETF yet',
+      lastDate: s.lastDate || null,
+      live: s.live || false,
+      signal: etfSignalFrom(s.tenDay ?? 0, s.hasEtf),
+    };
     const [macroRes, tfs] = await Promise.all([
       Promise.allSettled(Object.keys(MACRO).map(async k => { try { return [k, await fetchYahoo(k, '1d', '6mo')]; } catch (e) { return [k, null]; } })),
       fetchCryptoTFs(coin),

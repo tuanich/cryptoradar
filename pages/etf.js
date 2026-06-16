@@ -42,7 +42,7 @@ export default function EtfPage() {
         <div>
           <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>ETF Cash Flow</h1>
           <p style={{ margin: 0, fontSize: 12, color: '#888' }}>
-            Spot-ETF daily net flows · Source: CoinGlass
+            Spot-ETF daily net flows · Source: Farside Investors
             <span style={{ marginLeft: 8, padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700, background: isLive ? '#EAF3DE' : '#FAEEDA', color: isLive ? '#27500A' : '#854F0B' }}>
               {isLive ? '● Live' : 'Snapshot'}
             </span>
@@ -99,7 +99,7 @@ export default function EtfPage() {
       </div>
 
       <div style={{ textAlign: 'center', fontSize: 11, color: '#aaa', paddingBottom: '2rem' }}>
-        Source: CoinGlass · {isLive ? `live, refreshes every ${Math.round(REFRESH / 1000)}s` : 'snapshot fallback (live source unavailable)'} · as of {asOf} · Educational only, not financial advice
+        Source: Farside Investors · {isLive ? `live, refreshes every ${Math.round(REFRESH / 1000)}s` : 'snapshot fallback (live source unavailable)'} · as of {asOf} · Educational only, not financial advice
       </div>
     </>
   );

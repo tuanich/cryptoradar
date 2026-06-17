@@ -16,6 +16,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [upd, setUpd] = useState('');
   const [tgStatus, setTgStatus] = useState('');
+  const [etfDetail, setEtfDetail] = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -29,6 +30,14 @@ export default function Dashboard() {
   useEffect(() => { setLoading(true); setData(null); load(); }, [load]);
   useEffect(() => { const t = setInterval(load, 60000); return () => clearInterval(t); }, [load]);
 
+  // Full ETF detail (daily series + cumulative) from /api/etf — covers all assets.
+  useEffect(() => {
+    const fetchEtf = () => fetch('/api/etf').then(r => r.json()).then(setEtfDetail).catch(() => {});
+    fetchEtf();
+    const t = setInterval(fetchEtf, 60000);
+    return () => clearInterval(t);
+  }, []);
+
   const sendTg = async () => {
     if (!data?.rec) return; setTgStatus('Sending...');
     try {
@@ -41,6 +50,8 @@ export default function Dashboard() {
   };
 
   const rec = data?.rec, md = data?.macroData, etf = rec?.etf;
+  const ed = etfDetail?.assets?.[coin.label]; // { daily, labels, total, funds }
+  const etfLive = etfDetail?.live;
   const isBuy = rec?.actionShort === 'BUY', isSell = rec?.actionShort === 'SELL';
   const isWait = rec?.actionShort?.startsWith('WAIT');
   const bg = isBuy ? '#EAF3DE' : isSell ? '#FCEBEB' : isWait ? '#FAEEDA' : '#F1EFE8';
@@ -135,11 +146,11 @@ export default function Dashboard() {
               <div style={{ marginTop: 8, fontSize: 11, color: '#666', padding: '5px 8px', background: '#f8f7f4', borderRadius: 6 }}>Trend: <strong>{ms}</strong> ({(rec.macroTrend?.pct || 0) > 0 ? '+' : ''}{rec.macroTrend?.pct || 0}%)</div>
             </div>
 
-            {/* ETF flows — now per-asset, live via etfFlows/CoinGlass */}
+            {/* ETF flows — per-asset, live via Farside; detail from /api/etf */}
             <div style={card}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                 <div><div style={{ fontSize: 13, fontWeight: 700 }}>🏦 {coin.label} ETF flows</div>
-                  <div style={{ fontSize: 11, color: '#888' }}>{etf?.live ? 'Live · CoinGlass' : 'Snapshot · Farside'}</div></div>
+                  <div style={{ fontSize: 11, color: '#888' }}>{(etfLive ?? etf?.live) ? 'Live · Farside' : 'Snapshot · Farside'}</div></div>
                 {etf && <Badge sig={etf.signal} />}
               </div>
               {etf?.hasEtf ? <>
@@ -149,9 +160,44 @@ export default function Dashboard() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '0.5px solid #f5f3f0', fontSize: 13 }}>
                   <span style={{ color: '#666' }}>10-day net</span><strong style={{ color: etf.net10d >= 0 ? '#27500A' : '#A32D2D' }}>{fmtM(etf.net10d)}</strong>
                 </div>
+                {ed && <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '0.5px solid #f5f3f0', fontSize: 13 }}>
+                  <span style={{ color: '#666' }}>Cumulative since launch</span><strong>${(ed.total / 1000).toFixed(1)}B</strong>
+                </div>}
+
+                {/* Compact daily bar chart (zero-baseline, green up / red down) */}
+                {ed && ed.daily?.length ? (() => {
+                  const maxAbs = Math.max(...ed.daily.map(v => Math.abs(v)), 1);
+                  return (
+                    <div style={{ marginTop: 10 }}>
+                      <div style={{ fontSize: 11, color: '#888', marginBottom: 4 }}>Daily net flow — last {ed.daily.length} days (US$m)</div>
+                      <div style={{ display: 'flex', alignItems: 'stretch', gap: 2, height: 46 }}>
+                        {ed.daily.map((v, i) => {
+                          const h = (Math.abs(v) / maxAbs) * 20;
+                          const pos = v >= 0;
+                          return (
+                            <div key={i} title={ed.labels[i] + ': ' + fmtM(v)} style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                              <div style={{ flex: 1, display: 'flex', alignItems: 'flex-end' }}>
+                                {pos && <div style={{ width: '100%', height: h, background: '#3B6D11', borderRadius: '2px 2px 0 0' }} />}
+                              </div>
+                              <div style={{ height: 1, background: '#ddd' }} />
+                              <div style={{ flex: 1, display: 'flex', alignItems: 'flex-start' }}>
+                                {!pos && <div style={{ width: '100%', height: h, background: '#A32D2D', borderRadius: '0 0 2px 2px' }} />}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: '#aaa', marginTop: 2 }}>
+                        <span>{ed.labels[0]}</span><span>{ed.labels[ed.labels.length - 1]}</span>
+                      </div>
+                    </div>
+                  );
+                })() : null}
+
                 <div style={{ marginTop: 8, fontSize: 11, color: '#666', padding: '5px 8px', background: '#f8f7f4', borderRadius: 6 }}>
                   {etf.net10d > 100 ? 'Inflows → bullish' : etf.net10d < -100 ? 'Outflows → bearish' : 'Flat → neutral'} · {etf.funds}
                 </div>
+                <a href="/etf" style={{ display: 'inline-block', marginTop: 8, fontSize: 12, color: '#534AB7', textDecoration: 'none' }}>View full ETF page →</a>
               </> : <div style={{ fontSize: 12, color: '#888', padding: '12px 4px' }}>No US spot ETF for {coin.label} yet — this layer is N/A.</div>}
             </div>
           </div>

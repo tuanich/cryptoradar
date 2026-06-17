@@ -99,7 +99,7 @@ export default function EtfPage() {
       </div>
 
       <div style={{ textAlign: 'center', fontSize: 11, color: '#aaa', paddingBottom: '2rem' }}>
-        Source: Farside Investors · {isLive ? `live, refreshes every ${Math.round(REFRESH / 1000)}s` : 'snapshot fallback (live source unavailable)'} · as of {asOf} · Educational only, not financial advice
+        Source: Farside Investors · {isLive ? `live, refreshes every ${Math.round(REFRESH / 1000)}s` : 'snapshot fallback (live source unavailable)'} · as of {asOf} · Educational only, not financial advice!!!
       </div>
     </>
   );
